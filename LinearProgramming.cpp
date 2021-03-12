@@ -11,11 +11,14 @@ using namespace std;
 
 class LinearProgramming {
 private:
+	const double MAX_D = 1e10; //大M
 	int n, m; // n个变量，m个方程
-	int relaxedN; //松弛后relaxedN个变量
-	vector<vector<double>> A;
-	vector<double> b;
-	vector<char> equationType;
+	int relaxedN; // 松弛后relaxedN个变量
+	int manualN; // 松弛后再添加人工变量，有manualN个变量
+	vector<vector<double>> A; // A矩阵
+	vector<double> b; //b矩阵
+	vector<char> equationType; //方程类型
+	vector<int> baseVar; //可行基下标
 	long scanLong(const string& str, int& index) { //扫描一个长整型
 		char* ptr;
 		long result = strtol(&str.c_str()[index], &ptr, 0);
@@ -32,7 +35,6 @@ private:
 		int newIndex = ptr - str.c_str();
 		if (index == newIndex) {
 			result = 1;
-			//newIndex++;
 		}
 		index = newIndex;
 		return result;
@@ -75,20 +77,20 @@ private:
 		return s;
 	}
 public:
-	LinearProgramming(int n, int m) :n(n), m(m) {
+	LinearProgramming(int n, int m) :n(n), m(m) { //构造函数
 		A.resize(m + 1); //第0行放待求函数
 		for (int i = 0; i <= m; i++)
 			A[i].resize(n);
 		b.resize(m + 1);
 		equationType.resize(m + 1);
 	}
-	void init(vector<string>& equationArray) {
+	void init(vector<string>& equationArray) { //初始化方程
 		assert(equationArray.size() == m + 1);
 		for (int i = 0; i <= m; i++) {
 			scanEquation(preprocessEquation(equationArray[i]), i);
 		}
 	}
-	void printOriginEquations() {
+	void printOriginEquations() { //打印化简后的原始方程
 		cout << "Print Simplified Equations:\n";
 		for (int i = 0; i <= m; i++) { // m个方程依次打印
 			for (int j = 0; j < n; j++) { // n个变量依次打印
@@ -97,13 +99,13 @@ public:
 			if (i != 0) // 待求函数不打印b值
 				cout << equationType[i] << "\t" << b[i];
 			else
-				cout << "=\tz";
+				cout << "=\tz -> max";
 			cout << "\n";
 		}
 		cout << "Number of variable: " << n << "\n";
 		cout << "Number of equation: " << m << "\n";
 	}
-	void relax() {
+	void relax() { //添加松弛变量
 		relaxedN = n;
 		for (int i = 1; i <= m; i++) {
 			if (equationType[i] != '=')relaxedN++;
@@ -116,6 +118,7 @@ public:
 				cnt++;
 				if (equationType[i] == '<') { //添加正松弛变量
 					A[i][cnt] = 1;
+					baseVar.push_back(cnt); //添加到初始可行基
 				}
 				else { //equationType[i] == '>' //添加负松弛变量
 					A[i][cnt] = -1;
@@ -123,7 +126,7 @@ public:
 			}
 		}
 	}
-	void printRelaxedEquations() {
+	void printRelaxedEquations() { //打印松弛后的方程
 		cout << "Print Relaxed Equations:\n";
 		for (int i = 0; i <= m; i++) { // m个方程依次打印
 			for (int j = 0; j < relaxedN; j++) { // n个变量依次打印
@@ -132,17 +135,50 @@ public:
 			if (i != 0) // 待求函数不打印b值
 				cout << "=\t" << b[i];
 			else
-				cout << "=\tz";
+				cout << "=\tz -> max";
 			cout << "\n";
 		}
 		cout << "Number of relaxed variable: " << relaxedN << "\n";
 		cout << "Number of relaxed equation: " << m << "\n";
 	}
-	
+	void manual() { //添加人工变量
+		manualN = relaxedN;
+		for (int i = 1; i <= m; i++) {
+			if (equationType[i] == '=' || equationType[i] == '>')manualN++;
+		}
+		for (int i = 0; i <= m; i++)
+			A[i].resize(manualN);
+		for (int i = relaxedN; i < manualN; i++) {
+			A[0][i] = -MAX_D; //设置人工变量系数为-M
+		}
+		int cnt = relaxedN - 1;
+		for (int i = 1; i <= m; i++) {
+			if (equationType[i] == '=' || equationType[i] == '>') { //添加人工变量
+				cnt++;
+				A[i][cnt] = 1;
+				baseVar.push_back(cnt);
+			}
+		}
+	}
+	void printManualEquations() { //打印松弛、添加人工变量的方程
+		cout << "Print Manual Equations:\n";
+		for (int i = 0; i <= m; i++) { // m个方程依次打印
+			for (int j = 0; j < manualN; j++) { // n个变量依次打印
+				cout << A[i][j] << "x" << j << "\t";
+			}
+			if (i != 0) // 待求函数不打印b值
+				cout << "=\t" << b[i];
+			else
+				cout << "=\tz -> max";
+			cout << "\n";
+		}
+		cout << "Number of manual variable: " << manualN << "\n";
+		cout << "Number of manual equation: " << m << "\n";
+	}
 };
 int main() {
 	int n, m;
-	cout << "Input n(number of variable), m(number of equation):";
+	cout << "Input n(number of variable), m(number of equation): ";
 	cin >> n >> m;
 	cin.get();
 	LinearProgramming LP(n, m);
@@ -152,7 +188,7 @@ int main() {
 	getline(cin, s);
 	equationArray.push_back(s);
 	for (int i = 1; i <= m; i++) {
-		cout << "Input equation " << i << " :";
+		cout << "Input equation " << i << ": ";
 		getline(cin, s);
 		equationArray.push_back(s);
 	}
@@ -160,4 +196,6 @@ int main() {
 	LP.printOriginEquations();
 	LP.relax();
 	LP.printRelaxedEquations();
+	LP.manual();
+	LP.printManualEquations();
 }
